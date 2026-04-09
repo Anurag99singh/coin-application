@@ -61,6 +61,9 @@ async function startServer() {
       const token = jwt.sign({ userId: user._id }, JWT_SECRET);
       res.json({ user: { _id: user._id, username: user.username, total_coins: user.total_coins, min_per_coin_ratio: user.min_per_coin_ratio }, token });
     } catch (err: any) {
+      if (err.code === 11000) {
+        return res.status(400).json({ error: 'Username already exists. Please choose another one.' });
+      }
       res.status(400).json({ error: err.message });
     }
   });
