@@ -1,0 +1,71 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-headline: "Plus Jakarta Sans", sans-serif;
+  --font-body: "Be Vietnam Pro", sans-serif;
+  --font-label: "Plus Jakarta Sans", sans-serif;
+
+  --color-primary-container: #fd9000;
+  --color-primary: #8a4c00;
+  --color-on-background: #432900;
+  --color-on-primary-fixed-variant: #532b00;
+  --color-inverse-on-surface: #bf965e;
+  --color-on-error: #ffefec;
+  --color-primary-dim: #794200;
+  --color-on-surface-variant: #765524;
+  --color-inverse-primary: #fd9000;
+  --color-tertiary: #a7295a;
+  --color-on-tertiary: #ffeff1;
+  --color-on-primary-container: #462400;
+  --color-secondary-fixed-dim: #b7c0ff;
+  --color-on-primary: #fff0e6;
+  --color-error: #b02500;
+  --color-primary-fixed: #fd9000;
+  --color-surface: #fff5ec;
+  --color-surface-dim: #ffcc86;
+  --color-outline-variant: #d0a66d;
+  --color-on-tertiary-fixed-variant: #760038;
+  --color-secondary-container: #c9cfff;
+  --color-on-error-container: #520c00;
+  --color-on-secondary-fixed-variant: #3a499c;
+  --color-outline: #95703c;
+  --color-surface-container: #ffe4c4;
+  --color-on-secondary-container: #304092;
+  --color-background: #fff5ec;
+  --color-on-secondary-fixed: #1a2b7e;
+  --color-surface-tint: #8a4c00;
+  --color-primary-fixed-dim: #ea8400;
+  --color-surface-container-high: #ffddb3;
+  --color-on-tertiary-container: #66002f;
+  --color-tertiary-dim: #971b4e;
+  --color-surface-container-lowest: #ffffff;
+  --color-secondary-fixed: #c9cfff;
+  --color-error-container: #f95630;
+  --color-secondary-dim: #39489b;
+  --color-on-secondary: #f2f1ff;
+  --color-surface-container-highest: #ffd6a2;
+  --color-secondary: #4555a8;
+  --color-surface-container-low: #ffeedc;
+  --color-inverse-surface: #170c00;
+  --color-tertiary-fixed-dim: #ff75a2;
+  --color-on-tertiary-fixed: #380017;
+  --color-error-dim: #b92902;
+  --color-tertiary-container: #ff8eaf;
+  --color-on-surface: #432900;
+  --color-surface-bright: #fff5ec;
+  --color-tertiary-fixed: #ff8eaf;
+  --color-on-primary-fixed: #1e0c00;
+  --color-surface-variant: #ffd6a2;
+
+  --radius-default: 1rem;
+  --radius-lg: 2rem;
+  --radius-xl: 3rem;
+}
+
+@layer base {
+  body {
+    @apply font-body bg-background text-on-background min-h-screen;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
