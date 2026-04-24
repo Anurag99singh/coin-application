@@ -6,6 +6,7 @@ import confetti from 'canvas-confetti';
 import { AuthContext } from '../App.tsx';
 import { Activity } from '../types.ts';
 import { cn } from '../lib/utils.ts';
+import { profileImageBase64 } from '../profileImage.ts';
 
 const LEVEL_THRESHOLD = 150;
 
@@ -112,7 +113,7 @@ export function Dashboard() {
           {/* Image Container */}
           <div className="relative w-full h-full rounded-[3rem] overflow-hidden border-8 border-white shadow-2xl bg-[#fcdcb5]">
             <img 
-              src="/profile.png" 
+              src={profileImageBase64}
               alt="Hero Character"
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"

@@ -30,7 +30,7 @@ export function Layout() {
                 className="w-full h-full object-cover"
               />
             </div>
-            <h1 className="text-2xl font-black text-primary tracking-tight font-headline">Habit Hero</h1>
+            <h1 className="text-2xl font-black text-primary tracking-tight font-headline">PointsKaPitara</h1>
           </div>
           <button 
             onClick={() => setIsSettingsOpen(true)}
