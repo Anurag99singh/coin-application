@@ -5,6 +5,10 @@ import { motion } from 'motion/react';
 import { AuthContext } from '../App.tsx';
 import { Activity } from '../types.ts';
 import { cn } from '../lib/utils.ts';
+import {
+  readActivityFormPreferences,
+  saveActivityFormPreferences
+} from '../lib/activityFormPreferences.ts';
 
 const DEFAULT_GAME_OPTIONS = [
   'Space Explorer',
@@ -13,13 +17,23 @@ const DEFAULT_GAME_OPTIONS = [
   'Word Wizard'
 ];
 
+const SPEND_FORM_DEFAULTS = {
+  duration: 20,
+  ratio: 1,
+};
+
 export function Spend() {
   const { user, token, updateUser } = useContext(AuthContext)!;
   const navigate = useNavigate();
+  const userId = user?._id || 'guest';
   const [selectedGame, setSelectedGame] = useState(DEFAULT_GAME_OPTIONS[0]);
   const [customName, setCustomName] = useState('');
-  const [duration, setDuration] = useState(20);
-  const [ratio, setRatio] = useState(user?.min_per_coin_ratio || 1);
+  const [duration, setDuration] = useState(() => (
+    readActivityFormPreferences('spend', userId, SPEND_FORM_DEFAULTS).duration
+  ));
+  const [ratio, setRatio] = useState(() => (
+    readActivityFormPreferences('spend', userId, SPEND_FORM_DEFAULTS).ratio
+  ));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recentPlays, setRecentPlays] = useState<Activity[]>([]);
@@ -33,6 +47,10 @@ export function Spend() {
       .then((res) => res.json())
       .then((data) => setRecentPlays(data));
   }, [token]);
+
+  useEffect(() => {
+    saveActivityFormPreferences('spend', userId, { duration, ratio });
+  }, [duration, ratio, userId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,18 +69,6 @@ export function Spend() {
     }
 
     try {
-      // First update ratio if it changed
-      if (ratio !== user?.min_per_coin_ratio) {
-        await fetch('/api/profile/ratio', {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ ratio }),
-        });
-      }
-
       const res = await fetch('/api/activities', {
         method: 'POST',
         headers: {

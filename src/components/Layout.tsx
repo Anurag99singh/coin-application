@@ -1,9 +1,9 @@
-import React, { useState, useContext } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Gamepad2, Stars, Gift, Settings } from 'lucide-react';
-import { AuthContext } from '../App.tsx';
-import { SettingsModal } from './SettingsModal.tsx';
-import { cn } from '../lib/utils.ts';
+import React, { useState, useContext } from "react";
+import { Outlet, Link, useLocation } from "react-router-dom";
+import { LayoutDashboard, Gamepad2, Stars, Gift, Settings } from "lucide-react";
+import { AuthContext } from "../App.tsx";
+import { SettingsModal } from "./SettingsModal.tsx";
+import { cn } from "../lib/utils.ts";
 
 export function Layout() {
   const location = useLocation();
@@ -11,10 +11,10 @@ export function Layout() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const navItems = [
-    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/spend', label: 'Spend', icon: Gamepad2 },
-    { path: '/earn', label: 'Earn', icon: Stars },
-    { path: '/surprise', label: 'Surprise', icon: Gift },
+    { path: "/", label: "Dashboard", icon: LayoutDashboard },
+    { path: "/spend", label: "Spend", icon: Gamepad2 },
+    { path: "/earn", label: "Earn", icon: Stars },
+    { path: "/surprise", label: "Surprise", icon: Gift },
   ];
 
   return (
@@ -24,15 +24,17 @@ export function Layout() {
         <div className="flex justify-between items-center px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/20">
-              <img 
-                alt="Avatar" 
-                src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" 
+              <img
+                alt="Avatar"
+                src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
                 className="w-full h-full object-cover"
               />
             </div>
-            <h1 className="text-2xl font-black text-primary tracking-tight font-headline">PointsKaPitara</h1>
+            <h1 className="text-2xl font-black text-primary tracking-tight font-headline">
+              Habit Hero
+            </h1>
           </div>
-          <button 
+          <button
             onClick={() => setIsSettingsOpen(true)}
             className="flex items-center justify-center text-primary hover:scale-105 active:scale-95 transition-all"
           >
@@ -51,27 +53,32 @@ export function Layout() {
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
-          
+
           return (
             <Link
               key={item.path}
               to={item.path}
               className={cn(
                 "flex flex-col items-center justify-center transition-all duration-150 active:scale-90",
-                isActive 
-                  ? "bg-primary-container text-white rounded-[2rem] px-5 py-2 scale-110 shadow-lg" 
-                  : "text-secondary opacity-70 px-4 py-2 hover:bg-surface-container-low rounded-full"
+                isActive
+                  ? "bg-primary-container text-white rounded-[2rem] px-5 py-2 scale-110 shadow-lg"
+                  : "text-secondary opacity-70 px-4 py-2 hover:bg-surface-container-low rounded-full",
               )}
             >
               <Icon className={cn("w-6 h-6", isActive && "fill-current")} />
-              <span className="text-[12px] font-bold tracking-wide mt-0.5">{item.label}</span>
+              <span className="text-[12px] font-bold tracking-wide mt-0.5">
+                {item.label}
+              </span>
             </Link>
           );
         })}
       </nav>
 
       {/* Settings Modal */}
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </div>
   );
 }

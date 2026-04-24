@@ -6,6 +6,10 @@ import confetti from 'canvas-confetti';
 import { AuthContext } from '../App.tsx';
 import { Activity } from '../types.ts';
 import { cn } from '../lib/utils.ts';
+import {
+  readActivityFormPreferences,
+  saveActivityFormPreferences
+} from '../lib/activityFormPreferences.ts';
 
 const DEFAULT_EARN_OPTIONS = [
   'Reading Time',
@@ -15,13 +19,23 @@ const DEFAULT_EARN_OPTIONS = [
   'Physical Play'
 ];
 
+const EARN_FORM_DEFAULTS = {
+  duration: 20,
+  ratio: 1,
+};
+
 export function Earn() {
   const { user, token, updateUser } = useContext(AuthContext)!;
   const navigate = useNavigate();
+  const userId = user?._id || 'guest';
   const [selectedActivity, setSelectedActivity] = useState(DEFAULT_EARN_OPTIONS[0]);
   const [customName, setCustomName] = useState('');
-  const [duration, setDuration] = useState(20);
-  const [ratio, setRatio] = useState(user?.min_per_coin_ratio || 1);
+  const [duration, setDuration] = useState(() => (
+    readActivityFormPreferences('earn', userId, EARN_FORM_DEFAULTS).duration
+  ));
+  const [ratio, setRatio] = useState(() => (
+    readActivityFormPreferences('earn', userId, EARN_FORM_DEFAULTS).ratio
+  ));
   const [loading, setLoading] = useState(false);
   const [todayEarnings, setTodayEarnings] = useState(0);
   const [recentEarnings, setRecentEarnings] = useState<Activity[]>([]);
@@ -42,6 +56,10 @@ export function Earn() {
       .then((data) => setRecentEarnings(data));
   }, [token]);
 
+  useEffect(() => {
+    saveActivityFormPreferences('earn', userId, { duration, ratio });
+  }, [duration, ratio, userId]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -52,18 +70,6 @@ export function Earn() {
     const previousTotalCoins = Math.round(user?.total_coins || 0);
 
     try {
-      // First update ratio if it changed
-      if (ratio !== user?.min_per_coin_ratio) {
-        await fetch('/api/profile/ratio', {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ ratio }),
-        });
-      }
-
       const res = await fetch('/api/activities', {
         method: 'POST',
         headers: {
