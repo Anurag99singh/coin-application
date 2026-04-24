@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, LogOut, Lock, Gift } from 'lucide-react';
 import { AuthContext } from '../App.tsx';
@@ -8,21 +8,37 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
+const DEFAULT_SURPRISE_GOAL = 500;
+const DEFAULT_SURPRISE_REWARD = 'Mystery Surprise';
+
+async function readJsonResponse(res: Response) {
+  const text = await res.text();
+  if (!text.trim()) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: 'Server returned an unexpected response. Please restart the app server and try again.' };
+  }
+}
+
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const { user, token, updateUser, logout } = useContext(AuthContext)!;
   const [saving, setSaving] = useState(false);
   const [parentalPassword, setParentalPassword] = useState('');
   const [isParentalUnlocked, setIsParentalUnlocked] = useState(false);
-  const defaultSurprises = {
-    '1': 'Extra 15 mins screen time!',
-    '2': 'Special dessert tonight!',
-    '3': 'New small toy!',
-    '4': 'Trip to the park!',
-    '5': 'Choose a movie for family night!'
-  };
-  const [surprises, setSurprises] = useState<Record<string, string>>(
-    user?.surprises && Object.keys(user.surprises).length > 0 ? user.surprises : defaultSurprises
-  );
+  const [surpriseGoalPoints, setSurpriseGoalPoints] = useState(user?.surprise_goal_points || DEFAULT_SURPRISE_GOAL);
+  const [surpriseRewardName, setSurpriseRewardName] = useState(user?.surprise_reward_name || DEFAULT_SURPRISE_REWARD);
+  const [saveMessage, setSaveMessage] = useState('');
+  const [saveError, setSaveError] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setSurpriseGoalPoints(user?.surprise_goal_points || DEFAULT_SURPRISE_GOAL);
+    setSurpriseRewardName(user?.surprise_reward_name || DEFAULT_SURPRISE_REWARD);
+    setSaveMessage('');
+    setSaveError('');
+  }, [isOpen]);
 
   const handleUnlockParental = () => {
     if (parentalPassword === 'pari') {
@@ -33,24 +49,40 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     }
   };
 
-  const handleSaveSurprises = async () => {
+  const handleSaveSurpriseGoal = async () => {
     setSaving(true);
+    setSaveMessage('');
+    setSaveError('');
     try {
-      const res = await fetch('/api/profile/surprises', {
+      const targetPoints = Math.max(1, Math.round(Number(surpriseGoalPoints) || DEFAULT_SURPRISE_GOAL));
+      const rewardName = surpriseRewardName.trim() || DEFAULT_SURPRISE_REWARD;
+
+      const res = await fetch('/api/profile/surprise-goal', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ surprises, password: 'pari' }),
+        body: JSON.stringify({
+          surprise_goal_points: targetPoints,
+          surprise_reward_name: rewardName,
+          password: 'pari'
+        }),
       });
-      const data = await res.json();
-      if (!data.error) {
-        updateUser(data);
-        setIsParentalUnlocked(false);
+      const data = await readJsonResponse(res);
+      if (!res.ok || data.error || !data._id) {
+        setSaveError(data.error || 'Could not save surprise. Please try again.');
+        return;
       }
+
+      updateUser(data);
+      setSurpriseGoalPoints(targetPoints);
+      setSurpriseRewardName(rewardName);
+      setSaveMessage('Surprise saved.');
+      setIsParentalUnlocked(false);
     } catch (err) {
       console.error(err);
+      setSaveError('Could not save surprise. Please check the server and try again.');
     } finally {
       setSaving(false);
     }
@@ -81,7 +113,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             </div>
 
             <div className="space-y-8">
-              {/* Parental Controls - Surprises */}
+              {/* Parental Controls - Surprise Goal */}
               <section className="space-y-4 bg-primary/5 p-4 rounded-2xl border border-primary/10">
                 <div className="flex items-center gap-2 mb-2">
                   <Lock className="w-4 h-4 text-primary" />
@@ -90,16 +122,28 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                 {!isParentalUnlocked ? (
                   <div className="space-y-3">
-                    <p className="text-xs text-on-surface-variant font-medium">Enter password to edit level surprises.</p>
+                    <p className="text-xs text-on-surface-variant font-medium">Enter password to edit the surprise reward.</p>
+                    {saveError && (
+                      <p className="rounded-xl bg-error/10 px-3 py-2 text-xs font-bold text-error">
+                        {saveError}
+                      </p>
+                    )}
+
+                    {saveMessage && (
+                      <p className="rounded-xl bg-primary-container/10 px-3 py-2 text-xs font-bold text-primary">
+                        {saveMessage}
+                      </p>
+                    )}
+
                     <div className="flex gap-2">
-                      <input 
+                      <input
                         type="password"
                         value={parentalPassword}
                         onChange={(e) => setParentalPassword(e.target.value)}
                         placeholder="Password"
                         className="flex-1 h-12 px-4 bg-surface rounded-xl border border-primary/20 focus:ring-2 focus:ring-primary text-sm"
                       />
-                      <button 
+                      <button
                         onClick={handleUnlockParental}
                         className="bg-primary text-on-primary px-4 rounded-xl font-bold text-sm active:scale-95 transition-all"
                       >
@@ -109,26 +153,57 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div className="space-y-3">
-                      {['1', '2', '3', '4', '5'].map(level => (
-                        <div key={level} className="space-y-1">
-                          <label className="text-[10px] font-black text-primary uppercase ml-1">Level {level}</label>
-                          <input 
-                            type="text"
-                            value={surprises[level] || ''}
-                            onChange={(e) => setSurprises({...surprises, [level]: e.target.value})}
-                            className="w-full h-10 px-3 bg-surface rounded-lg border border-primary/20 text-sm font-medium"
-                          />
-                        </div>
-                      ))}
+                    <div className="rounded-2xl bg-surface p-4 border border-primary/10">
+                      <div className="flex items-center gap-2 text-primary">
+                        <Gift className="w-5 h-5 fill-current" />
+                        <span className="text-sm font-black uppercase tracking-wider">Surprise Setup</span>
+                      </div>
+                      <p className="mt-2 text-xs font-bold text-on-surface-variant">
+                        Choose the reward and how many points your child needs to unlock it.
+                      </p>
                     </div>
-                    <button 
-                      onClick={handleSaveSurprises}
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-primary uppercase ml-1">Reward Name</label>
+                      <input
+                        type="text"
+                        value={surpriseRewardName}
+                        onChange={(e) => setSurpriseRewardName(e.target.value)}
+                        className="w-full h-11 px-3 bg-surface rounded-lg border border-primary/20 text-sm font-medium"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-primary uppercase ml-1">Target Points</label>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={surpriseGoalPoints}
+                        onChange={(e) => setSurpriseGoalPoints(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                        className="w-full h-11 px-3 bg-surface rounded-lg border border-primary/20 text-sm font-medium"
+                      />
+                    </div>
+
+                    {saveError && (
+                      <p className="rounded-xl bg-error/10 px-3 py-2 text-xs font-bold text-error">
+                        {saveError}
+                      </p>
+                    )}
+
+                    {saveMessage && (
+                      <p className="rounded-xl bg-primary-container/10 px-3 py-2 text-xs font-bold text-primary">
+                        {saveMessage}
+                      </p>
+                    )}
+
+                    <button
+                      onClick={handleSaveSurpriseGoal}
                       disabled={saving}
                       className="w-full h-12 bg-primary text-on-primary font-bold rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
                     >
                       <Gift className="w-4 h-4" />
-                      {saving ? 'Saving...' : 'Save Surprises'}
+                      {saving ? 'Saving...' : 'Save Surprise'}
                     </button>
                   </div>
                 )}

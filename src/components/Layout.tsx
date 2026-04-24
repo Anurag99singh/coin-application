@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Gamepad2, Stars, History as HistoryIcon, Settings } from 'lucide-react';
+import { LayoutDashboard, Gamepad2, Stars, Gift, Settings } from 'lucide-react';
 import { AuthContext } from '../App.tsx';
 import { SettingsModal } from './SettingsModal.tsx';
 import { cn } from '../lib/utils.ts';
@@ -14,7 +14,7 @@ export function Layout() {
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/spend', label: 'Spend', icon: Gamepad2 },
     { path: '/earn', label: 'Earn', icon: Stars },
-    { path: '/history', label: 'History', icon: HistoryIcon },
+    { path: '/surprise', label: 'Surprise', icon: Gift },
   ];
 
   return (

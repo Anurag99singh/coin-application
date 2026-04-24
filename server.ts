@@ -12,7 +12,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/habithero';
 
@@ -31,6 +31,36 @@ const authenticateToken = (req: any, res: any, next: any) => {
     req.user = user;
     next();
   });
+};
+
+const mapToObject = (value: any) => {
+  if (!value) return {};
+  if (value instanceof Map) return Object.fromEntries(value);
+  if (typeof value.toObject === 'function') return value.toObject();
+  return value;
+};
+
+const serializeUser = (user: any) => {
+  const totalCoins = Math.round(Math.max(0, Number(user.total_coins) || 0));
+  const cycleStart = Math.round(Math.max(0, Number(user.surprise_cycle_start_points) || 0));
+  const legacyCyclePoints = Math.max(0, totalCoins - cycleStart);
+  const cyclePoints = user.surprise_cycle_points === undefined || user.surprise_cycle_points === null
+    ? legacyCyclePoints
+    : Math.round(Math.max(0, Number(user.surprise_cycle_points) || 0));
+
+  return {
+    _id: user._id,
+    username: user.username,
+    total_coins: totalCoins,
+    min_per_coin_ratio: user.min_per_coin_ratio ?? 1,
+    custom_earn_activities: user.custom_earn_activities ?? [],
+    custom_play_activities: user.custom_play_activities ?? [],
+    surprises: mapToObject(user.surprises),
+    surprise_goal_points: user.surprise_goal_points ?? 500,
+    surprise_reward_name: user.surprise_reward_name || 'Mystery Surprise',
+    surprise_cycle_start_points: cycleStart,
+    surprise_cycle_points: cyclePoints,
+  };
 };
 
 async function startServer() {
@@ -59,7 +89,7 @@ async function startServer() {
       const user = new User({ username, password: hashedPassword });
       await user.save();
       const token = jwt.sign({ userId: user._id }, JWT_SECRET);
-      res.json({ user: { _id: user._id, username: user.username, total_coins: user.total_coins, min_per_coin_ratio: user.min_per_coin_ratio }, token });
+      res.json({ user: serializeUser(user), token });
     } catch (err: any) {
       if (err.code === 11000) {
         return res.status(400).json({ error: 'Username already exists. Please choose another one.' });
@@ -76,7 +106,7 @@ async function startServer() {
         return res.status(401).json({ error: 'Invalid credentials' });
       }
       const token = jwt.sign({ userId: user._id }, JWT_SECRET);
-      res.json({ user: { _id: user._id, username: user.username, total_coins: user.total_coins, min_per_coin_ratio: user.min_per_coin_ratio }, token });
+      res.json({ user: serializeUser(user), token });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
@@ -87,15 +117,66 @@ async function startServer() {
     try {
       const user = await (User as any).findById(req.user.userId);
       if (!user) return res.status(404).json({ error: 'User not found' });
-      res.json({ 
-        _id: user._id, 
-        username: user.username, 
-        total_coins: user.total_coins, 
-        min_per_coin_ratio: user.min_per_coin_ratio,
-        custom_earn_activities: user.custom_earn_activities,
-        custom_play_activities: user.custom_play_activities,
-        surprises: user.surprises
-      });
+      res.json(serializeUser(user));
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.patch('/api/profile/surprise-goal', authenticateToken, async (req: any, res) => {
+    try {
+      const { surprise_goal_points, surprise_reward_name, password } = req.body;
+      if (password !== 'pari') {
+        return res.status(403).json({ error: 'Incorrect parental password' });
+      }
+
+      const targetPoints = Math.max(1, Math.round(Number(surprise_goal_points) || 500));
+      const rewardName = typeof surprise_reward_name === 'string' && surprise_reward_name.trim()
+        ? surprise_reward_name.trim()
+        : 'Mystery Surprise';
+
+      const user = await (User as any).findByIdAndUpdate(
+        req.user.userId,
+        {
+          surprise_goal_points: targetPoints,
+          surprise_reward_name: rewardName
+        },
+        { returnDocument: 'after' }
+      );
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      res.json(serializeUser(user));
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/profile/claim-surprise', authenticateToken, async (req: any, res) => {
+    try {
+      const user = await (User as any).findById(req.user.userId);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      const totalCoins = Math.round(Math.max(0, Number(user.total_coins) || 0));
+      const cycleStart = Math.round(Math.max(0, Number(user.surprise_cycle_start_points) || 0));
+      const goalPoints = Math.max(1, Math.round(Number(user.surprise_goal_points) || 500));
+      const legacyCyclePoints = Math.max(0, totalCoins - cycleStart);
+      const cyclePoints = user.surprise_cycle_points === undefined || user.surprise_cycle_points === null
+        ? legacyCyclePoints
+        : Math.round(Math.max(0, Number(user.surprise_cycle_points) || 0));
+
+      if (cyclePoints < goalPoints) {
+        return res.status(400).json({ error: 'Surprise is not unlocked yet.' });
+      }
+
+      const rewardName = typeof user.surprise_reward_name === 'string' && user.surprise_reward_name.trim()
+        ? user.surprise_reward_name.trim()
+        : 'Mystery Surprise';
+
+      user.surprise_cycle_start_points = totalCoins;
+      user.surprise_cycle_points = 0;
+      await user.save();
+
+      res.json({ user: serializeUser(user), rewardName });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
@@ -110,9 +191,10 @@ async function startServer() {
       const user = await (User as any).findByIdAndUpdate(
         req.user.userId,
         { surprises },
-        { new: true }
+        { returnDocument: 'after' }
       );
-      res.json(user);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      res.json(serializeUser(user));
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
@@ -121,8 +203,13 @@ async function startServer() {
   app.patch('/api/profile/ratio', authenticateToken, async (req: any, res) => {
     try {
       const { ratio } = req.body;
-      const user = await (User as any).findByIdAndUpdate(req.user.userId, { min_per_coin_ratio: ratio }, { new: true });
-      res.json(user);
+      const user = await (User as any).findByIdAndUpdate(
+        req.user.userId,
+        { min_per_coin_ratio: ratio },
+        { returnDocument: 'after' }
+      );
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      res.json(serializeUser(user));
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
@@ -135,9 +222,10 @@ async function startServer() {
       const user = await (User as any).findByIdAndUpdate(
         req.user.userId,
         { $pull: { [field]: activityName } },
-        { new: true }
+        { returnDocument: 'after' }
       );
-      res.json(user);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      res.json(serializeUser(user));
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
@@ -158,6 +246,9 @@ async function startServer() {
 
       // Update user total coins and optionally add custom activity
       const update: any = { $inc: { total_coins: pointsImpact } };
+      if (type === 'earn' && pointsImpact > 0) {
+        update.$inc.surprise_cycle_points = Math.round(pointsImpact);
+      }
       if (isCustom) {
         const field = type === 'earn' ? 'custom_earn_activities' : 'custom_play_activities';
         update.$addToSet = { [field]: activityName };
@@ -176,16 +267,6 @@ async function startServer() {
       const activities = await (Activity as any).find({ userId: req.user.userId })
         .sort({ createdAt: -1 })
         .limit(5);
-      res.json(activities);
-    } catch (err: any) {
-      res.status(400).json({ error: err.message });
-    }
-  });
-
-  app.get('/api/activities/history', authenticateToken, async (req: any, res) => {
-    try {
-      const activities = await (Activity as any).find({ userId: req.user.userId })
-        .sort({ createdAt: -1 });
       res.json(activities);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -223,6 +304,10 @@ async function startServer() {
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
+  });
+
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'API route not found. Please restart the app server if this route was just added.' });
   });
 
   // Vite middleware for development

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Gamepad2, Plus, ChevronDown, Timer, History, Trash2, Coins } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Gamepad2, Plus, ChevronDown, Timer, Clock3, Coins } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AuthContext } from '../App.tsx';
 import { Activity } from '../types.ts';
@@ -42,9 +42,10 @@ export function Spend() {
     const isCustomInput = selectedGame === 'Custom Activity...';
     const activityName = isCustomInput ? customName : selectedGame;
     const pointsImpact = -Math.round(duration * ratio);
+    const previousTotalCoins = Math.round(user?.total_coins || 0);
 
     if (user!.total_coins + pointsImpact < 0) {
-      setError("Points are less to spend in the chest! Earn more first. 🪙");
+      setError('Points are less to spend in the chest! Earn more first.');
       setLoading(false);
       return;
     }
@@ -85,7 +86,13 @@ export function Spend() {
         const profileData = await profileRes.json();
         updateUser(profileData);
         
-        navigate('/');
+        navigate('/', {
+          state: {
+            pointsDelta: pointsImpact,
+            previousTotalCoins,
+            animationKey: Date.now(),
+          },
+        });
       }
     } catch (err) {
       console.error(err);
@@ -132,17 +139,6 @@ export function Spend() {
               </select>
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-outline w-5 h-5" />
             </div>
-
-            {/* Custom Game List */}
-            {(user?.custom_play_activities || []).length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {user?.custom_play_activities?.map(act => (
-                  <div key={act} className="flex items-center gap-1 bg-surface-container-high px-3 py-1.5 rounded-full text-xs font-bold text-on-surface-variant">
-                    <span className="cursor-pointer" onClick={() => setSelectedGame(act)}>{act}</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           {selectedGame === 'Custom Activity...' && (
@@ -216,10 +212,9 @@ export function Spend() {
       <section className="space-y-4 pb-8">
         <div className="flex justify-between items-end px-2">
           <div className="flex items-center gap-2">
-            <History className="w-5 h-5 text-secondary" />
+            <Clock3 className="w-5 h-5 text-secondary" />
             <h2 className="text-xl font-bold text-on-background font-headline">Recent Spending</h2>
           </div>
-          <Link to="/history" className="text-sm font-semibold text-secondary hover:underline">View All</Link>
         </div>
         
         <div className="bg-surface-container-low rounded-lg overflow-hidden p-1 shadow-sm">
@@ -256,7 +251,7 @@ export function Spend() {
                 {recentPlays.length === 0 && (
                   <tr>
                     <td colSpan={3} className="px-4 py-8 text-center text-on-surface-variant text-sm">
-                      No games played yet. Time for some fun! 🎮
+                      No games played yet. Time for some fun!
                     </td>
                   </tr>
                 )}

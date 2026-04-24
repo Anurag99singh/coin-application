@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Stars, PlusCircle, ChevronDown, History, Trash2, Timer, Coins } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Stars, PlusCircle, ChevronDown, Clock3, Timer, Coins } from 'lucide-react';
 import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { AuthContext } from '../App.tsx';
@@ -49,6 +49,7 @@ export function Earn() {
     const isCustomInput = selectedActivity === 'Custom Activity...';
     const activityName = isCustomInput ? customName : selectedActivity;
     const pointsImpact = Math.round(duration * ratio);
+    const previousTotalCoins = Math.round(user?.total_coins || 0);
 
     try {
       // First update ratio if it changed
@@ -94,7 +95,13 @@ export function Earn() {
         updateUser(profileData);
         
         setTodayEarnings(prev => prev + pointsImpact);
-        setTimeout(() => navigate('/'), 1500);
+        setTimeout(() => navigate('/', {
+          state: {
+            pointsDelta: pointsImpact,
+            previousTotalCoins,
+            animationKey: Date.now(),
+          },
+        }), 1500);
       }
     } catch (err) {
       console.error(err);
@@ -138,17 +145,6 @@ export function Earn() {
               </select>
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant w-5 h-5" />
             </div>
-            
-            {/* Custom Activity List */}
-            {(user?.custom_earn_activities || []).length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {user?.custom_earn_activities?.map(act => (
-                  <div key={act} className="flex items-center gap-1 bg-surface-container-high px-3 py-1.5 rounded-full text-xs font-bold text-on-surface-variant">
-                    <span className="cursor-pointer" onClick={() => setSelectedActivity(act)}>{act}</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           {selectedActivity === 'Custom Activity...' && (
@@ -221,10 +217,9 @@ export function Earn() {
       <section className="space-y-4 pb-8">
         <div className="flex justify-between items-end px-2">
           <div className="flex items-center gap-2">
-            <History className="w-5 h-5 text-primary" />
+            <Clock3 className="w-5 h-5 text-primary" />
             <h2 className="text-xl font-bold text-on-background font-headline">Recent Earnings</h2>
           </div>
-          <Link to="/history" className="text-sm font-semibold text-secondary hover:underline">View All</Link>
         </div>
         
         <div className="bg-surface-container-low rounded-lg overflow-hidden p-1 shadow-sm">
@@ -261,7 +256,7 @@ export function Earn() {
                 {recentEarnings.length === 0 && (
                   <tr>
                     <td colSpan={3} className="px-4 py-8 text-center text-on-surface-variant text-sm">
-                      No earnings yet today. Let's get started! 🚀
+                      No earnings yet today. Let's get started!
                     </td>
                   </tr>
                 )}

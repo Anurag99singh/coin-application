@@ -1,13 +1,12 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useEffect, createContext } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout.tsx';
 import { Dashboard } from './components/Dashboard.tsx';
 import { Earn } from './components/Earn.tsx';
 import { Spend } from './components/Spend.tsx';
-import { History } from './components/History.tsx';
+import { Surprise } from './components/Surprise.tsx';
 import { Auth } from './components/Auth.tsx';
-import { User, Activity } from './types.ts';
+import { User } from './types.ts';
 
 interface AuthContextType {
   user: User | null;
@@ -73,7 +72,7 @@ export default function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/earn" element={<Earn />} />
               <Route path="/spend" element={<Spend />} />
-              <Route path="/history" element={<History />} />
+              <Route path="/surprise" element={<Surprise />} />
               <Route path="*" element={<Navigate to="/" />} />
             </Route>
           )}
