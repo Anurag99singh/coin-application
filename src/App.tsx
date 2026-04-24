@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Layout } from './components/Layout.tsx';
 import { Dashboard } from './components/Dashboard.tsx';
 import { Earn } from './components/Earn.tsx';
-import { Play } from './components/Play.tsx';
+import { Spend } from './components/Spend.tsx';
 import { History } from './components/History.tsx';
 import { Auth } from './components/Auth.tsx';
 import { User, Activity } from './types.ts';
@@ -72,7 +72,7 @@ export default function App() {
             <Route element={<Layout />}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/earn" element={<Earn />} />
-              <Route path="/play" element={<Play />} />
+              <Route path="/spend" element={<Spend />} />
               <Route path="/history" element={<History />} />
               <Route path="*" element={<Navigate to="/" />} />
             </Route>

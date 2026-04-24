@@ -87,7 +87,32 @@ async function startServer() {
     try {
       const user = await (User as any).findById(req.user.userId);
       if (!user) return res.status(404).json({ error: 'User not found' });
-      res.json({ _id: user._id, username: user.username, total_coins: user.total_coins, min_per_coin_ratio: user.min_per_coin_ratio });
+      res.json({ 
+        _id: user._id, 
+        username: user.username, 
+        total_coins: user.total_coins, 
+        min_per_coin_ratio: user.min_per_coin_ratio,
+        custom_earn_activities: user.custom_earn_activities,
+        custom_play_activities: user.custom_play_activities,
+        surprises: user.surprises
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.patch('/api/profile/surprises', authenticateToken, async (req: any, res) => {
+    try {
+      const { surprises, password } = req.body;
+      if (password !== 'pari') {
+        return res.status(403).json({ error: 'Incorrect parental password' });
+      }
+      const user = await (User as any).findByIdAndUpdate(
+        req.user.userId,
+        { surprises },
+        { new: true }
+      );
+      res.json(user);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
@@ -103,10 +128,25 @@ async function startServer() {
     }
   });
 
+  app.delete('/api/profile/custom-activity', authenticateToken, async (req: any, res) => {
+    try {
+      const { type, activityName } = req.body;
+      const field = type === 'earn' ? 'custom_earn_activities' : 'custom_play_activities';
+      const user = await (User as any).findByIdAndUpdate(
+        req.user.userId,
+        { $pull: { [field]: activityName } },
+        { new: true }
+      );
+      res.json(user);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
   // Activity Routes
   app.post('/api/activities', authenticateToken, async (req: any, res) => {
     try {
-      const { type, activityName, durationMinutes, pointsImpact } = req.body;
+      const { type, activityName, durationMinutes, pointsImpact, isCustom } = req.body;
       const activity = new Activity({
         userId: req.user.userId,
         type,
@@ -116,8 +156,14 @@ async function startServer() {
       });
       await activity.save();
 
-      // Update user total coins
-      await (User as any).findByIdAndUpdate(req.user.userId, { $inc: { total_coins: pointsImpact } });
+      // Update user total coins and optionally add custom activity
+      const update: any = { $inc: { total_coins: pointsImpact } };
+      if (isCustom) {
+        const field = type === 'earn' ? 'custom_earn_activities' : 'custom_play_activities';
+        update.$addToSet = { [field]: activityName };
+      }
+
+      await (User as any).findByIdAndUpdate(req.user.userId, update);
 
       res.json(activity);
     } catch (err: any) {

@@ -12,7 +12,7 @@ export function Layout() {
 
   const navItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/play', label: 'Play', icon: Gamepad2 },
+    { path: '/spend', label: 'Spend', icon: Gamepad2 },
     { path: '/earn', label: 'Earn', icon: Stars },
     { path: '/history', label: 'History', icon: HistoryIcon },
   ];
