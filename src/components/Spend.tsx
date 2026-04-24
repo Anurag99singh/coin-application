@@ -41,7 +41,7 @@ export function Spend() {
 
     const isCustomInput = selectedGame === 'Custom Activity...';
     const activityName = isCustomInput ? customName : selectedGame;
-    const pointsImpact = -(duration * ratio);
+    const pointsImpact = -Math.round(duration * ratio);
 
     if (user!.total_coins + pointsImpact < 0) {
       setError("Points are less to spend in the chest! Earn more first. 🪙");
@@ -185,10 +185,10 @@ export function Spend() {
                 <input 
                   type="number"
                   required
-                  min="0.1"
-                  step="0.1"
+                  min="1"
+                  step="1"
                   value={ratio}
-                  onChange={(e) => setRatio(Number(e.target.value))}
+                  onChange={(e) => setRatio(Math.round(Number(e.target.value)))}
                   className="w-full h-14 pl-4 pr-10 bg-surface-container-lowest border-none rounded-default text-on-surface font-medium focus:ring-2 focus:ring-primary shadow-sm"
                 />
                 <Coins className="absolute right-3 top-1/2 -translate-y-1/2 text-outline-variant w-4 h-4" />
@@ -248,7 +248,7 @@ export function Spend() {
                     </td>
                     <td className="px-4 py-4 text-right">
                       <span className="text-xs font-bold text-error">
-                        {activity.pointsImpact}
+                        {Math.round(activity.pointsImpact)}
                       </span>
                     </td>
                   </tr>

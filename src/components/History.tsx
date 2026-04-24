@@ -25,12 +25,12 @@ export function History() {
       .then((data) => setActivities(data));
   }, [token]);
 
-  const totalEarned = activities
+  const totalEarned = Math.round(activities
     .filter(a => a.type === 'earn')
-    .reduce((sum, a) => sum + a.pointsImpact, 0);
-  const totalSpent = activities
+    .reduce((sum, a) => sum + a.pointsImpact, 0));
+  const totalSpent = Math.round(activities
     .filter(a => a.type === 'spend')
-    .reduce((sum, a) => sum + Math.abs(a.pointsImpact), 0);
+    .reduce((sum, a) => sum + Math.abs(a.pointsImpact), 0));
 
   return (
     <div className="pt-4 space-y-8">
@@ -93,7 +93,7 @@ export function History() {
                   "font-headline font-bold",
                   isGain ? "text-primary" : "text-tertiary"
                 )}>
-                  {isGain ? `+${activity.pointsImpact}` : activity.pointsImpact}
+                  {isGain ? `+${Math.round(activity.pointsImpact)}` : Math.round(activity.pointsImpact)}
                 </p>
                 <p className={cn(
                   "text-[10px] uppercase font-bold tracking-tighter",

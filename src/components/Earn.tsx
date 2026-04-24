@@ -48,7 +48,7 @@ export function Earn() {
 
     const isCustomInput = selectedActivity === 'Custom Activity...';
     const activityName = isCustomInput ? customName : selectedActivity;
-    const pointsImpact = duration * ratio;
+    const pointsImpact = Math.round(duration * ratio);
 
     try {
       // First update ratio if it changed
@@ -190,10 +190,10 @@ export function Earn() {
                 <input 
                   type="number"
                   required
-                  min="0.1"
-                  step="0.1"
+                  min="1"
+                  step="1"
                   value={ratio}
-                  onChange={(e) => setRatio(Number(e.target.value))}
+                  onChange={(e) => setRatio(Math.round(Number(e.target.value)))}
                   className="w-full h-14 pl-4 pr-10 bg-surface-container-lowest border-none rounded-default focus:ring-2 focus:ring-primary font-medium shadow-sm"
                 />
                 <Coins className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 w-4 h-4" />
@@ -253,7 +253,7 @@ export function Earn() {
                     </td>
                     <td className="px-4 py-4 text-right">
                       <span className="text-xs font-bold text-tertiary">
-                        +{activity.pointsImpact}
+                        +{Math.round(activity.pointsImpact)}
                       </span>
                     </td>
                   </tr>

@@ -44,7 +44,7 @@ export function Dashboard() {
   const [isLevelUpOpen, setIsLevelUpOpen] = useState(false);
   const prevLevelRef = useRef<number | null>(null);
 
-  const totalCoins = Math.max(0, user?.total_coins || 0);
+  const totalCoins = Math.round(Math.max(0, user?.total_coins || 0));
   
   let tempCoins = totalCoins;
   let calcLevel = 1;
@@ -112,7 +112,7 @@ export function Dashboard() {
           {/* Image Container */}
           <div className="relative w-full h-full rounded-[3rem] overflow-hidden border-8 border-white shadow-2xl bg-[#fcdcb5]">
             <img 
-              src="/coing.png" 
+              src="/profile.png" 
               alt="Hero Character"
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
@@ -253,7 +253,7 @@ export function Dashboard() {
                         "text-sm font-black",
                         activity.pointsImpact > 0 ? "text-[#c2185b]" : "text-[#4555a8]"
                       )}>
-                        {activity.pointsImpact > 0 ? `+${activity.pointsImpact}` : activity.pointsImpact}
+                        {activity.pointsImpact > 0 ? `+${Math.round(activity.pointsImpact)}` : Math.round(activity.pointsImpact)}
                       </span>
                     </td>
                   </tr>
