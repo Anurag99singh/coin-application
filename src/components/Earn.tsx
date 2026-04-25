@@ -24,6 +24,20 @@ const EARN_FORM_DEFAULTS = {
   ratio: 1,
 };
 
+const cleanPositiveIntegerText = (value: string) => {
+  return value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+};
+
+const parsePositiveInteger = (value: string, fallback = 1) => {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return Math.round(parsed);
+};
+
 export function Earn() {
   const { user, token, updateUser } = useContext(AuthContext)!;
   const navigate = useNavigate();
@@ -31,10 +45,10 @@ export function Earn() {
   const [selectedActivity, setSelectedActivity] = useState(DEFAULT_EARN_OPTIONS[0]);
   const [customName, setCustomName] = useState('');
   const [duration, setDuration] = useState(() => (
-    readActivityFormPreferences('earn', userId, EARN_FORM_DEFAULTS).duration
+    String(readActivityFormPreferences('earn', userId, EARN_FORM_DEFAULTS).duration)
   ));
   const [ratio, setRatio] = useState(() => (
-    readActivityFormPreferences('earn', userId, EARN_FORM_DEFAULTS).ratio
+    String(readActivityFormPreferences('earn', userId, EARN_FORM_DEFAULTS).ratio)
   ));
   const [loading, setLoading] = useState(false);
   const [todayEarnings, setTodayEarnings] = useState(0);
@@ -57,7 +71,15 @@ export function Earn() {
   }, [token]);
 
   useEffect(() => {
-    saveActivityFormPreferences('earn', userId, { duration, ratio });
+    const parsedDuration = parsePositiveInteger(duration, 0);
+    const parsedRatio = parsePositiveInteger(ratio, 0);
+
+    if (parsedDuration > 0 && parsedRatio > 0) {
+      saveActivityFormPreferences('earn', userId, {
+        duration: parsedDuration,
+        ratio: parsedRatio
+      });
+    }
   }, [duration, ratio, userId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -66,7 +88,9 @@ export function Earn() {
 
     const isCustomInput = selectedActivity === 'Custom Activity...';
     const activityName = isCustomInput ? customName : selectedActivity;
-    const pointsImpact = Math.round(duration * ratio);
+    const durationMinutes = parsePositiveInteger(duration);
+    const pointRatio = parsePositiveInteger(ratio);
+    const pointsImpact = Math.round(durationMinutes * pointRatio);
     const previousTotalCoins = Math.round(user?.total_coins || 0);
 
     try {
@@ -79,7 +103,7 @@ export function Earn() {
         body: JSON.stringify({
           type: 'earn',
           activityName,
-          durationMinutes: duration,
+          durationMinutes,
           pointsImpact,
           isCustom: isCustomInput
         }),
@@ -176,11 +200,12 @@ export function Earn() {
               <label className="block text-sm font-semibold text-on-surface-variant ml-1">Duration (min)</label>
               <div className="relative">
                 <input 
-                  type="number"
+                  type="text"
                   required
-                  min="1"
                   value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value))}
+                  onChange={(e) => setDuration(cleanPositiveIntegerText(e.target.value))}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   className="w-full h-14 pl-4 pr-10 bg-surface-container-lowest border-none rounded-default focus:ring-2 focus:ring-primary font-medium shadow-sm"
                 />
                 <Timer className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 w-4 h-4" />
@@ -190,12 +215,12 @@ export function Earn() {
               <label className="block text-sm font-semibold text-on-surface-variant ml-1">Ratio (pts/min)</label>
               <div className="relative">
                 <input 
-                  type="number"
+                  type="text"
                   required
-                  min="1"
-                  step="1"
                   value={ratio}
-                  onChange={(e) => setRatio(Math.round(Number(e.target.value)))}
+                  onChange={(e) => setRatio(cleanPositiveIntegerText(e.target.value))}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   className="w-full h-14 pl-4 pr-10 bg-surface-container-lowest border-none rounded-default focus:ring-2 focus:ring-primary font-medium shadow-sm"
                 />
                 <Coins className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 w-4 h-4" />
@@ -205,7 +230,9 @@ export function Earn() {
 
           <div className="bg-primary/5 p-4 rounded-xl border border-primary/10 flex justify-between items-center">
             <span className="text-sm font-bold text-on-surface-variant">Estimated Points</span>
-            <span className="text-2xl font-black text-primary">{Math.round(duration * ratio)}</span>
+            <span className="text-2xl font-black text-primary">
+              {Math.round(parsePositiveInteger(duration, 0) * parsePositiveInteger(ratio, 0))}
+            </span>
           </div>
 
           <button 

@@ -11,6 +11,20 @@ interface SettingsModalProps {
 const DEFAULT_SURPRISE_GOAL = 500;
 const DEFAULT_SURPRISE_REWARD = 'Mystery Surprise';
 
+const cleanPositiveIntegerText = (value: string) => {
+  return value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+};
+
+const parsePositiveInteger = (value: string, fallback = 1) => {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return Math.round(parsed);
+};
+
 async function readJsonResponse(res: Response) {
   const text = await res.text();
   if (!text.trim()) return {};
@@ -27,14 +41,14 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [saving, setSaving] = useState(false);
   const [parentalPassword, setParentalPassword] = useState('');
   const [isParentalUnlocked, setIsParentalUnlocked] = useState(false);
-  const [surpriseGoalPoints, setSurpriseGoalPoints] = useState(user?.surprise_goal_points || DEFAULT_SURPRISE_GOAL);
+  const [surpriseGoalPoints, setSurpriseGoalPoints] = useState(String(user?.surprise_goal_points || DEFAULT_SURPRISE_GOAL));
   const [surpriseRewardName, setSurpriseRewardName] = useState(user?.surprise_reward_name || DEFAULT_SURPRISE_REWARD);
   const [saveMessage, setSaveMessage] = useState('');
   const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     if (!isOpen) return;
-    setSurpriseGoalPoints(user?.surprise_goal_points || DEFAULT_SURPRISE_GOAL);
+    setSurpriseGoalPoints(String(user?.surprise_goal_points || DEFAULT_SURPRISE_GOAL));
     setSurpriseRewardName(user?.surprise_reward_name || DEFAULT_SURPRISE_REWARD);
     setSaveMessage('');
     setSaveError('');
@@ -54,7 +68,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setSaveMessage('');
     setSaveError('');
     try {
-      const targetPoints = Math.max(1, Math.round(Number(surpriseGoalPoints) || DEFAULT_SURPRISE_GOAL));
+      const targetPoints = parsePositiveInteger(surpriseGoalPoints, DEFAULT_SURPRISE_GOAL);
       const rewardName = surpriseRewardName.trim() || DEFAULT_SURPRISE_REWARD;
 
       const res = await fetch('/api/profile/surprise-goal', {
@@ -76,7 +90,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       }
 
       updateUser(data);
-      setSurpriseGoalPoints(targetPoints);
+      setSurpriseGoalPoints(String(targetPoints));
       setSurpriseRewardName(rewardName);
       setSaveMessage('Surprise saved.');
       setIsParentalUnlocked(false);
@@ -176,11 +190,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-primary uppercase ml-1">Target Points</label>
                       <input
-                        type="number"
-                        min="1"
-                        step="1"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={surpriseGoalPoints}
-                        onChange={(e) => setSurpriseGoalPoints(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                        onChange={(e) => setSurpriseGoalPoints(cleanPositiveIntegerText(e.target.value))}
                         className="w-full h-11 px-3 bg-surface rounded-lg border border-primary/20 text-sm font-medium"
                       />
                     </div>

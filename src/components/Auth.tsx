@@ -1,7 +1,13 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../App.tsx';
+import { cn } from '../lib/utils.ts';
 
-export function Auth() {
+interface AuthProps {
+  variant?: 'page' | 'modal';
+  onSuccess?: () => void;
+}
+
+export function Auth({ variant = 'page', onSuccess }: AuthProps) {
   const { login } = useContext(AuthContext)!;
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
@@ -28,6 +34,7 @@ export function Auth() {
         setError(data.error);
       } else {
         login(data.user, data.token);
+        onSuccess?.();
       }
     } catch (err) {
       setError('Something went wrong. Please try again.');
@@ -36,8 +43,13 @@ export function Auth() {
     }
   };
 
+  const isModal = variant === 'modal';
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-background">
+    <div className={cn(
+      'flex flex-col items-center justify-center bg-background',
+      isModal ? 'rounded-[2rem] px-5 py-8 shadow-2xl' : 'min-h-screen px-6'
+    )}>
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center">
           <h1 className="text-4xl font-black text-primary font-headline tracking-tight">Habit Hero</h1>

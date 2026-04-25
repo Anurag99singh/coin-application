@@ -22,6 +22,20 @@ const SPEND_FORM_DEFAULTS = {
   ratio: 1,
 };
 
+const cleanPositiveIntegerText = (value: string) => {
+  return value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+};
+
+const parsePositiveInteger = (value: string, fallback = 1) => {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return Math.round(parsed);
+};
+
 export function Spend() {
   const { user, token, updateUser } = useContext(AuthContext)!;
   const navigate = useNavigate();
@@ -29,10 +43,10 @@ export function Spend() {
   const [selectedGame, setSelectedGame] = useState(DEFAULT_GAME_OPTIONS[0]);
   const [customName, setCustomName] = useState('');
   const [duration, setDuration] = useState(() => (
-    readActivityFormPreferences('spend', userId, SPEND_FORM_DEFAULTS).duration
+    String(readActivityFormPreferences('spend', userId, SPEND_FORM_DEFAULTS).duration)
   ));
   const [ratio, setRatio] = useState(() => (
-    readActivityFormPreferences('spend', userId, SPEND_FORM_DEFAULTS).ratio
+    String(readActivityFormPreferences('spend', userId, SPEND_FORM_DEFAULTS).ratio)
   ));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +63,15 @@ export function Spend() {
   }, [token]);
 
   useEffect(() => {
-    saveActivityFormPreferences('spend', userId, { duration, ratio });
+    const parsedDuration = parsePositiveInteger(duration, 0);
+    const parsedRatio = parsePositiveInteger(ratio, 0);
+
+    if (parsedDuration > 0 && parsedRatio > 0) {
+      saveActivityFormPreferences('spend', userId, {
+        duration: parsedDuration,
+        ratio: parsedRatio
+      });
+    }
   }, [duration, ratio, userId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,7 +81,9 @@ export function Spend() {
 
     const isCustomInput = selectedGame === 'Custom Activity...';
     const activityName = isCustomInput ? customName : selectedGame;
-    const pointsImpact = -Math.round(duration * ratio);
+    const durationMinutes = parsePositiveInteger(duration);
+    const pointRatio = parsePositiveInteger(ratio);
+    const pointsImpact = -Math.round(durationMinutes * pointRatio);
     const previousTotalCoins = Math.round(user?.total_coins || 0);
 
     if (user!.total_coins + pointsImpact < 0) {
@@ -78,7 +102,7 @@ export function Spend() {
         body: JSON.stringify({
           type: 'spend',
           activityName,
-          durationMinutes: duration,
+          durationMinutes,
           pointsImpact,
           isCustom: isCustomInput
         }),
@@ -170,11 +194,12 @@ export function Spend() {
               <label className="block text-sm font-bold text-on-surface-variant px-1">Duration (min)</label>
               <div className="relative">
                 <input 
-                  type="number"
+                  type="text"
                   required
-                  min="1"
                   value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value))}
+                  onChange={(e) => setDuration(cleanPositiveIntegerText(e.target.value))}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   placeholder="Enter minutes"
                   className="w-full h-14 pl-4 pr-10 bg-surface-container-lowest border-none rounded-default text-on-surface font-medium focus:ring-2 focus:ring-primary shadow-sm"
                 />
@@ -185,12 +210,12 @@ export function Spend() {
               <label className="block text-sm font-bold text-on-surface-variant px-1">Ratio (pts/min)</label>
               <div className="relative">
                 <input 
-                  type="number"
+                  type="text"
                   required
-                  min="1"
-                  step="1"
                   value={ratio}
-                  onChange={(e) => setRatio(Math.round(Number(e.target.value)))}
+                  onChange={(e) => setRatio(cleanPositiveIntegerText(e.target.value))}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   className="w-full h-14 pl-4 pr-10 bg-surface-container-lowest border-none rounded-default text-on-surface font-medium focus:ring-2 focus:ring-primary shadow-sm"
                 />
                 <Coins className="absolute right-3 top-1/2 -translate-y-1/2 text-outline-variant w-4 h-4" />
@@ -200,7 +225,9 @@ export function Spend() {
 
           <div className="bg-secondary/5 p-4 rounded-xl border border-secondary/10 flex justify-between items-center">
             <span className="text-sm font-bold text-on-surface-variant">Cost to Play</span>
-            <span className="text-2xl font-black text-secondary">{Math.round(duration * ratio)}</span>
+            <span className="text-2xl font-black text-secondary">
+              {Math.round(parsePositiveInteger(duration, 0) * parsePositiveInteger(ratio, 0))}
+            </span>
           </div>
 
           <button 

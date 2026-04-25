@@ -262,6 +262,40 @@ async function startServer() {
     }
   });
 
+  app.delete('/api/activities/:activityId', authenticateToken, async (req: any, res) => {
+    try {
+      const activity = await (Activity as any).findOne({
+        _id: req.params.activityId,
+        userId: req.user.userId
+      });
+      if (!activity) return res.status(404).json({ error: 'Activity not found' });
+
+      const user = await (User as any).findById(req.user.userId);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      const pointsImpact = Math.round(Number(activity.pointsImpact) || 0);
+      const currentTotalCoins = Math.round(Math.max(0, Number(user.total_coins) || 0));
+      const cycleStart = Math.round(Math.max(0, Number(user.surprise_cycle_start_points) || 0));
+      const legacyCyclePoints = Math.max(0, currentTotalCoins - cycleStart);
+      const currentCyclePoints = user.surprise_cycle_points === undefined || user.surprise_cycle_points === null
+        ? legacyCyclePoints
+        : Math.round(Math.max(0, Number(user.surprise_cycle_points) || 0));
+
+      user.total_coins = Math.max(0, currentTotalCoins - pointsImpact);
+
+      if (activity.type === 'earn' && pointsImpact > 0) {
+        user.surprise_cycle_points = Math.max(0, currentCyclePoints - pointsImpact);
+      }
+
+      await user.save();
+      await activity.deleteOne();
+
+      res.json({ user: serializeUser(user), deletedActivityId: activity._id });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
   app.get('/api/activities/recent', authenticateToken, async (req: any, res) => {
     try {
       const activities = await (Activity as any).find({ userId: req.user.userId })

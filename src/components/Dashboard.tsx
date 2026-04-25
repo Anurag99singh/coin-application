@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Gamepad2, PlusCircle, Trophy } from 'lucide-react';
+import { Gamepad2, PlusCircle, Trash2, Trophy } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AuthContext } from '../App.tsx';
 import { Activity } from '../types.ts';
@@ -47,6 +47,41 @@ function getRandomMotivationQuote(previousIndex: number | null) {
   }
 
   return { quote: MOTIVATION_QUOTES[nextIndex], index: nextIndex };
+}
+
+const getHighestLevelStorageKey = (userId: string) => `habit-hero:highest-level:${userId}`;
+
+function readHighestCelebratedLevel(userId: string, fallbackLevel: number) {
+  if (typeof window === 'undefined') {
+    return fallbackLevel;
+  }
+
+  const savedLevel = Number(window.localStorage.getItem(getHighestLevelStorageKey(userId)));
+
+  if (!Number.isFinite(savedLevel) || savedLevel < 1) {
+    return fallbackLevel;
+  }
+
+  return Math.max(Math.round(savedLevel), fallbackLevel);
+}
+
+function saveHighestCelebratedLevel(userId: string, level: number) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(getHighestLevelStorageKey(userId), String(level));
+}
+
+async function readJsonResponse(res: Response) {
+  const text = await res.text();
+  if (!text.trim()) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: 'Server returned an unexpected response. Please restart the app server and try again.' };
+  }
 }
 
 const LevelMeter: React.FC<LevelMeterProps> = ({
@@ -153,7 +188,7 @@ const getLevelProgress = (coins: number) => {
 };
 
 export function Dashboard() {
-  const { user, token } = useContext(AuthContext)!;
+  const { user, token, updateUser, openAuthModal } = useContext(AuthContext)!;
   const location = useLocation();
   const navigate = useNavigate();
   const routeState = location.state as DashboardNavigationState | null;
@@ -161,7 +196,12 @@ export function Dashboard() {
   const [isLevelUpOpen, setIsLevelUpOpen] = useState(false);
   const [motivationQuote, setMotivationQuote] = useState(MOTIVATION_QUOTES[0]);
   const [activeDelta, setActiveDelta] = useState<number | null>(null);
+  const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState('');
   const prevLevelRef = useRef<number | null>(null);
+  const highestCelebratedLevelRef = useRef<number | null>(null);
+  const coinDirectionRef = useRef(0);
+  const suppressLevelCelebrationRef = useRef(false);
   const quoteIndexRef = useRef<number | null>(null);
 
   const totalCoins = Math.round(Math.max(0, user?.total_coins || 0));
@@ -175,6 +215,15 @@ export function Dashboard() {
   const { level, currentXP, levelThreshold, progressPercent } = getLevelProgress(animatedCoins);
 
   useEffect(() => {
+    if (!user?._id) {
+      highestCelebratedLevelRef.current = level;
+      return;
+    }
+
+    highestCelebratedLevelRef.current = readHighestCelebratedLevel(user._id, level);
+  }, [user?._id]);
+
+  useEffect(() => {
     const from = typeof routeState?.previousTotalCoins === 'number'
       ? Math.round(Math.max(0, routeState.previousTotalCoins))
       : animatedCoins;
@@ -182,6 +231,8 @@ export function Dashboard() {
     const delta = typeof routeState?.pointsDelta === 'number' ? routeState.pointsDelta : to - from;
 
     if (from === to) {
+      coinDirectionRef.current = 0;
+      suppressLevelCelebrationRef.current = false;
       setAnimatedCoins(to);
       if (routeState?.animationKey) {
         navigate('/', { replace: true, state: null });
@@ -189,6 +240,7 @@ export function Dashboard() {
       return;
     }
 
+    coinDirectionRef.current = to > from ? 1 : -1;
     setActiveDelta(delta);
     const startedAt = performance.now();
     const duration = 1200;
@@ -204,6 +256,7 @@ export function Dashboard() {
       } else {
         setAnimatedCoins(to);
         window.setTimeout(() => setActiveDelta(null), 700);
+        suppressLevelCelebrationRef.current = false;
         if (routeState?.animationKey) {
           navigate('/', { replace: true, state: null });
         }
@@ -216,6 +269,11 @@ export function Dashboard() {
   }, [routeState?.animationKey, totalCoins]);
 
   useEffect(() => {
+    if (!token) {
+      setRecentActivities([]);
+      return;
+    }
+
     fetch('/api/activities/recent', {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -224,7 +282,22 @@ export function Dashboard() {
   }, [token, totalCoins]);
 
   useEffect(() => {
-    if (prevLevelRef.current !== null && level > prevLevelRef.current) {
+    const highestCelebratedLevel = highestCelebratedLevelRef.current ?? level;
+    const isMovingUp = coinDirectionRef.current > 0;
+    const shouldSuppressCelebration = suppressLevelCelebrationRef.current;
+
+    if (
+      prevLevelRef.current !== null
+      && level > prevLevelRef.current
+      && level > highestCelebratedLevel
+      && isMovingUp
+      && !shouldSuppressCelebration
+    ) {
+      highestCelebratedLevelRef.current = level;
+      if (user?._id) {
+        saveHighestCelebratedLevel(user._id, level);
+      }
+
       const nextQuote = getRandomMotivationQuote(quoteIndexRef.current);
       quoteIndexRef.current = nextQuote.index;
       setMotivationQuote(nextQuote.quote);
@@ -237,7 +310,46 @@ export function Dashboard() {
       });
     }
     prevLevelRef.current = level;
-  }, [level]);
+  }, [level, user?._id]);
+
+  const handleProtectedLinkClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!user) {
+      event.preventDefault();
+      openAuthModal();
+    }
+  };
+
+  const handleDeleteActivity = async (activity: Activity) => {
+    if (!token) {
+      openAuthModal();
+      return;
+    }
+
+    setDeletingActivityId(activity._id);
+    setDeleteError('');
+
+    try {
+      const res = await fetch(`/api/activities/${activity._id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await readJsonResponse(res);
+
+      if (!res.ok || data.error || !data.user) {
+        setDeleteError(data.error || 'Could not delete this activity.');
+        return;
+      }
+
+      suppressLevelCelebrationRef.current = true;
+      updateUser(data.user);
+      setRecentActivities((activities) => activities.filter((item) => item._id !== activity._id));
+    } catch (err) {
+      console.error(err);
+      setDeleteError('Could not delete this activity. Please try again.');
+    } finally {
+      setDeletingActivityId(null);
+    }
+  };
 
   return (
     <div className="space-y-8 pt-4 pb-12">
@@ -253,6 +365,7 @@ export function Dashboard() {
       <div className="grid grid-cols-2 gap-4 pt-2">
         <Link
           to="/earn"
+          onClick={handleProtectedLinkClick}
           className="h-[72px] bg-[#f58200] text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-[0_6px_0_#c26600] active:shadow-none active:translate-y-[6px] transition-all hover:bg-[#e07600]"
         >
           <div className="bg-black/20 rounded-full p-1">
@@ -262,6 +375,7 @@ export function Dashboard() {
         </Link>
         <Link
           to="/spend"
+          onClick={handleProtectedLinkClick}
           className="h-[72px] bg-[#4555a8] text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-[0_6px_0_#2d3770] active:shadow-none active:translate-y-[6px] transition-all hover:bg-[#3b488f]"
         >
           <div className="bg-white/20 rounded-full p-1">
@@ -276,6 +390,11 @@ export function Dashboard() {
         <div className="flex items-end px-2">
           <h2 className="text-2xl font-black text-[#4a3f35] font-headline">Activity Log</h2>
         </div>
+        {deleteError && (
+          <p className="mx-2 rounded-xl bg-error/10 px-3 py-2 text-xs font-bold text-error">
+            {deleteError}
+          </p>
+        )}
         <div className="bg-[#f9f4e8] rounded-2xl overflow-hidden p-1 shadow-sm border border-[#e8dfce]">
           <div className="bg-white rounded-xl overflow-hidden">
             <table className="w-full text-left border-collapse">
@@ -284,6 +403,7 @@ export function Dashboard() {
                   <th className="px-4 py-4">Date</th>
                   <th className="px-4 py-4">Activity</th>
                   <th className="px-4 py-4 text-right">Points</th>
+                  {user && <th className="px-3 py-4 text-right">Delete</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#fcdcb5]/30">
@@ -308,12 +428,25 @@ export function Dashboard() {
                         {activity.pointsImpact > 0 ? `+${Math.round(activity.pointsImpact)}` : Math.round(activity.pointsImpact)}
                       </span>
                     </td>
+                    {user && (
+                      <td className="px-3 py-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteActivity(activity)}
+                          disabled={deletingActivityId === activity._id}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-error/10 text-error transition-all active:scale-90 disabled:opacity-50"
+                          aria-label={`Delete ${activity.activityName}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
                 {recentActivities.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="px-4 py-8 text-center text-[#8a4c00] font-bold text-sm">
-                      No activities yet. Start earning!
+                    <td colSpan={user ? 4 : 3} className="px-4 py-8 text-center text-[#8a4c00] font-bold text-sm">
+                      {user ? 'No activities yet. Start earning!' : 'Log in to start managing points.'}
                     </td>
                   </tr>
                 )}

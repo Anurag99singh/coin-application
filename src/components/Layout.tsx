@@ -7,7 +7,7 @@ import { cn } from "../lib/utils.ts";
 
 export function Layout() {
   const location = useLocation();
-  const { user } = useContext(AuthContext)!;
+  const { user, openAuthModal } = useContext(AuthContext)!;
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const navItems = [
@@ -16,6 +16,17 @@ export function Layout() {
     { path: "/earn", label: "Earn", icon: Stars },
     { path: "/surprise", label: "Surprise", icon: Gift },
   ];
+
+  const protectedPaths = new Set(["/spend", "/earn", "/surprise"]);
+
+  const handleSettingsClick = () => {
+    if (!user) {
+      openAuthModal();
+      return;
+    }
+
+    setIsSettingsOpen(true);
+  };
 
   return (
     <div className="min-h-screen flex flex-col max-w-md mx-auto bg-background relative">
@@ -35,7 +46,7 @@ export function Layout() {
             </h1>
           </div>
           <button
-            onClick={() => setIsSettingsOpen(true)}
+            onClick={handleSettingsClick}
             className="flex items-center justify-center text-primary hover:scale-105 active:scale-95 transition-all"
           >
             <Settings className="w-6 h-6" />
@@ -58,6 +69,12 @@ export function Layout() {
             <Link
               key={item.path}
               to={item.path}
+              onClick={(event) => {
+                if (!user && protectedPaths.has(item.path)) {
+                  event.preventDefault();
+                  openAuthModal();
+                }
+              }}
               className={cn(
                 "flex flex-col items-center justify-center transition-all duration-150 active:scale-90",
                 isActive
