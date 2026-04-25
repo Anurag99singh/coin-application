@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useCallback, useContext } from 'react';
+import React, { useState, useEffect, createContext, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { X } from 'lucide-react';
@@ -20,22 +20,6 @@ interface AuthContextType {
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
-
-function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { user, openAuthModal } = useContext(AuthContext)!;
-
-  useEffect(() => {
-    if (!user) {
-      openAuthModal();
-    }
-  }, [user, openAuthModal]);
-
-  if (!user) {
-    return <Navigate to="/" replace />;
-  }
-
-  return <>{children}</>;
-}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -92,9 +76,9 @@ export default function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/earn" element={<RequireAuth><Earn /></RequireAuth>} />
-            <Route path="/spend" element={<RequireAuth><Spend /></RequireAuth>} />
-            <Route path="/surprise" element={<RequireAuth><Surprise /></RequireAuth>} />
+            <Route path="/earn" element={<Earn />} />
+            <Route path="/spend" element={<Spend />} />
+            <Route path="/surprise" element={<Surprise />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Route>
         </Routes>

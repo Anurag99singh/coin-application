@@ -312,13 +312,6 @@ export function Dashboard() {
     prevLevelRef.current = level;
   }, [level, user?._id]);
 
-  const handleProtectedLinkClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!user) {
-      event.preventDefault();
-      openAuthModal();
-    }
-  };
-
   const handleDeleteActivity = async (activity: Activity) => {
     if (!token) {
       openAuthModal();
@@ -365,7 +358,6 @@ export function Dashboard() {
       <div className="grid grid-cols-2 gap-4 pt-2">
         <Link
           to="/earn"
-          onClick={handleProtectedLinkClick}
           className="h-[72px] bg-[#f58200] text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-[0_6px_0_#c26600] active:shadow-none active:translate-y-[6px] transition-all hover:bg-[#e07600]"
         >
           <div className="bg-black/20 rounded-full p-1">
@@ -375,7 +367,6 @@ export function Dashboard() {
         </Link>
         <Link
           to="/spend"
-          onClick={handleProtectedLinkClick}
           className="h-[72px] bg-[#4555a8] text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-[0_6px_0_#2d3770] active:shadow-none active:translate-y-[6px] transition-all hover:bg-[#3b488f]"
         >
           <div className="bg-white/20 rounded-full p-1">

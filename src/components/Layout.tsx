@@ -17,8 +17,6 @@ export function Layout() {
     { path: "/surprise", label: "Surprise", icon: Gift },
   ];
 
-  const protectedPaths = new Set(["/spend", "/earn", "/surprise"]);
-
   const handleSettingsClick = () => {
     if (!user) {
       openAuthModal();
@@ -69,12 +67,6 @@ export function Layout() {
             <Link
               key={item.path}
               to={item.path}
-              onClick={(event) => {
-                if (!user && protectedPaths.has(item.path)) {
-                  event.preventDefault();
-                  openAuthModal();
-                }
-              }}
               className={cn(
                 "flex flex-col items-center justify-center transition-all duration-150 active:scale-90",
                 isActive

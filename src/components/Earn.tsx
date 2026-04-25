@@ -39,7 +39,7 @@ const parsePositiveInteger = (value: string, fallback = 1) => {
 };
 
 export function Earn() {
-  const { user, token, updateUser } = useContext(AuthContext)!;
+  const { user, token, updateUser, openAuthModal } = useContext(AuthContext)!;
   const navigate = useNavigate();
   const userId = user?._id || 'guest';
   const [selectedActivity, setSelectedActivity] = useState(DEFAULT_EARN_OPTIONS[0]);
@@ -57,6 +57,12 @@ export function Earn() {
   const allOptions = [...DEFAULT_EARN_OPTIONS, ...(user?.custom_earn_activities || []), 'Custom Activity...'];
 
   useEffect(() => {
+    if (!token) {
+      setTodayEarnings(0);
+      setRecentEarnings([]);
+      return;
+    }
+
     fetch('/api/activities/today-earnings', {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -84,6 +90,12 @@ export function Earn() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!user || !token) {
+      openAuthModal();
+      return;
+    }
+
     setLoading(true);
 
     const isCustomInput = selectedActivity === 'Custom Activity...';

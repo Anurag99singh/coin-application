@@ -37,7 +37,7 @@ const parsePositiveInteger = (value: string, fallback = 1) => {
 };
 
 export function Spend() {
-  const { user, token, updateUser } = useContext(AuthContext)!;
+  const { user, token, updateUser, openAuthModal } = useContext(AuthContext)!;
   const navigate = useNavigate();
   const userId = user?._id || 'guest';
   const [selectedGame, setSelectedGame] = useState(DEFAULT_GAME_OPTIONS[0]);
@@ -55,6 +55,11 @@ export function Spend() {
   const allOptions = [...DEFAULT_GAME_OPTIONS, ...(user?.custom_play_activities || []), 'Custom Activity...'];
 
   useEffect(() => {
+    if (!token) {
+      setRecentPlays([]);
+      return;
+    }
+
     fetch('/api/activities/recent/spend', {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -76,6 +81,12 @@ export function Spend() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!user || !token) {
+      openAuthModal();
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -86,7 +97,7 @@ export function Spend() {
     const pointsImpact = -Math.round(durationMinutes * pointRatio);
     const previousTotalCoins = Math.round(user?.total_coins || 0);
 
-    if (user!.total_coins + pointsImpact < 0) {
+    if (user.total_coins + pointsImpact < 0) {
       setError('Points are less to spend in the chest! Earn more first.');
       setLoading(false);
       return;
