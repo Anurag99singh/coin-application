@@ -37,7 +37,7 @@ async function readJsonResponse(res: Response) {
 }
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { user, token, updateUser, logout } = useContext(AuthContext)!;
+  const { user, token, updateUser, logout, openAuthModal } = useContext(AuthContext)!;
   const [saving, setSaving] = useState(false);
   const [parentalPassword, setParentalPassword] = useState('');
   const [isParentalUnlocked, setIsParentalUnlocked] = useState(false);
@@ -100,6 +100,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleLogout = () => {
+    logout();
+    onClose();
+    window.setTimeout(openAuthModal, 150);
   };
 
   return (
@@ -224,7 +230,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </section>
 
               <button
-                onClick={logout}
+                onClick={handleLogout}
                 className="w-full h-14 bg-surface-container-high text-error font-bold rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2"
               >
                 <LogOut className="w-5 h-5" />
