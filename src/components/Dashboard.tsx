@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy } from 'lucide-react';
+import { Gamepad2, PlusCircle, Trophy } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AuthContext } from '../App.tsx';
 import { Activity } from '../types.ts';
@@ -249,6 +249,27 @@ export function Dashboard() {
         progressPercent={progressPercent}
         activeDelta={activeDelta}
       />
+
+      <div className="grid grid-cols-2 gap-4 pt-2">
+        <Link
+          to="/earn"
+          className="h-[72px] bg-[#f58200] text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-[0_6px_0_#c26600] active:shadow-none active:translate-y-[6px] transition-all hover:bg-[#e07600]"
+        >
+          <div className="bg-black/20 rounded-full p-1">
+            <PlusCircle className="w-5 h-5" />
+          </div>
+          <span className="font-headline text-xl">Earn</span>
+        </Link>
+        <Link
+          to="/spend"
+          className="h-[72px] bg-[#4555a8] text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-[0_6px_0_#2d3770] active:shadow-none active:translate-y-[6px] transition-all hover:bg-[#3b488f]"
+        >
+          <div className="bg-white/20 rounded-full p-1">
+            <Gamepad2 className="w-5 h-5" />
+          </div>
+          <span className="font-headline text-xl">Spend</span>
+        </Link>
+      </div>
 
       {/* Activity Log */}
       <section className="space-y-4 pt-2">
