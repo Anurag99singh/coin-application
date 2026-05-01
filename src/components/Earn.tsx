@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Stars, PlusCircle, ChevronDown, Clock3, Timer, Coins } from 'lucide-react';
+import { Stars, PlusCircle, ChevronDown, Clock3, Timer, Coins, ListChecks } from 'lucide-react';
 import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { AuthContext } from '../App.tsx';
-import { Activity } from '../types.ts';
+import type { Activity, RewardMode } from '../types.ts';
 import { cn } from '../lib/utils.ts';
 import {
   readActivityFormPreferences,
@@ -18,6 +18,8 @@ const DEFAULT_EARN_OPTIONS = [
   'Cleaned Room',
   'Physical Play'
 ];
+
+const CUSTOM_ACTIVITY_OPTION = 'Custom Activity...';
 
 const EARN_FORM_DEFAULTS = {
   duration: 20,
@@ -38,23 +40,51 @@ const parsePositiveInteger = (value: string, fallback = 1) => {
   return Math.round(parsed);
 };
 
+const formatEarnActivityDetail = (activity: Activity) => {
+  if (activity.rewardMode === 'completion') {
+    const completions = parsePositiveInteger(String(activity.completionCount || 1));
+    const inferredPointsEach = completions > 0
+      ? Math.round(Math.abs(activity.pointsImpact) / completions)
+      : 1;
+    const pointsEach = parsePositiveInteger(String(activity.pointsPerUnit || inferredPointsEach));
+
+    return `${completions} ${completions === 1 ? 'time' : 'times'} x ${pointsEach} pts`;
+  }
+
+  return `${activity.durationMinutes} mins`;
+};
+
 export function Earn() {
   const { user, token, updateUser, openAuthModal } = useContext(AuthContext)!;
   const navigate = useNavigate();
   const userId = user?._id || 'guest';
   const [selectedActivity, setSelectedActivity] = useState(DEFAULT_EARN_OPTIONS[0]);
   const [customName, setCustomName] = useState('');
+  const [rewardMode, setRewardMode] = useState<RewardMode>('timed');
   const [duration, setDuration] = useState(() => (
     String(readActivityFormPreferences('earn', userId, EARN_FORM_DEFAULTS).duration)
   ));
   const [ratio, setRatio] = useState(() => (
     String(readActivityFormPreferences('earn', userId, EARN_FORM_DEFAULTS).ratio)
   ));
+  const [completionCount, setCompletionCount] = useState('1');
   const [loading, setLoading] = useState(false);
   const [todayEarnings, setTodayEarnings] = useState(0);
   const [recentEarnings, setRecentEarnings] = useState<Activity[]>([]);
 
-  const allOptions = [...DEFAULT_EARN_OPTIONS, ...(user?.custom_earn_activities || []), 'Custom Activity...'];
+  const savedCustomActivities = user?.custom_earn_activities || [];
+  const allOptions = [...DEFAULT_EARN_OPTIONS, ...savedCustomActivities, CUSTOM_ACTIVITY_OPTION];
+  const isCustomInput = selectedActivity === CUSTOM_ACTIVITY_OPTION;
+  const isSavedCustomActivity = savedCustomActivities.includes(selectedActivity);
+  const isCustomActivity = isCustomInput || isSavedCustomActivity;
+  const activeRewardMode: RewardMode = isCustomActivity ? rewardMode : 'timed';
+  const activeActivityName = (isCustomInput ? customName : selectedActivity).trim();
+  const parsedDuration = parsePositiveInteger(duration, 0);
+  const parsedRatio = parsePositiveInteger(ratio, 0);
+  const parsedCompletionCount = parsePositiveInteger(completionCount, 0);
+  const estimatedPoints = activeRewardMode === 'completion'
+    ? Math.round(parsedCompletionCount * parsedRatio)
+    : Math.round(parsedDuration * parsedRatio);
 
   useEffect(() => {
     if (!token) {
@@ -88,6 +118,28 @@ export function Earn() {
     }
   }, [duration, ratio, userId]);
 
+  useEffect(() => {
+    if (selectedActivity === CUSTOM_ACTIVITY_OPTION) {
+      return;
+    }
+
+    const selectedRule = user?.custom_earn_activity_rules?.[selectedActivity];
+    if (selectedRule) {
+      setRewardMode(selectedRule.rewardMode);
+      setRatio(String(selectedRule.pointsPerUnit));
+
+      if (selectedRule.rewardMode === 'timed') {
+        setDuration(String(selectedRule.defaultDurationMinutes || EARN_FORM_DEFAULTS.duration));
+      }
+
+      return;
+    }
+
+    if ((user?.custom_earn_activities || []).includes(selectedActivity)) {
+      setRewardMode('timed');
+    }
+  }, [selectedActivity, user?.custom_earn_activity_rules, user?.custom_earn_activities]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -96,14 +148,23 @@ export function Earn() {
       return;
     }
 
-    setLoading(true);
+    const activityName = activeActivityName;
+    if (!activityName) {
+      return;
+    }
 
-    const isCustomInput = selectedActivity === 'Custom Activity...';
-    const activityName = isCustomInput ? customName : selectedActivity;
-    const durationMinutes = parsePositiveInteger(duration);
+    const selectedRewardMode = isCustomActivity ? rewardMode : 'timed';
+    const durationMinutes = selectedRewardMode === 'completion' ? 0 : parsePositiveInteger(duration);
+    const completionCountValue = selectedRewardMode === 'completion'
+      ? parsePositiveInteger(completionCount)
+      : undefined;
     const pointRatio = parsePositiveInteger(ratio);
-    const pointsImpact = Math.round(durationMinutes * pointRatio);
+    const pointsImpact = selectedRewardMode === 'completion'
+      ? Math.round((completionCountValue || 1) * pointRatio)
+      : Math.round(durationMinutes * pointRatio);
     const previousTotalCoins = Math.round(user?.total_coins || 0);
+
+    setLoading(true);
 
     try {
       const res = await fetch('/api/activities', {
@@ -117,7 +178,10 @@ export function Earn() {
           activityName,
           durationMinutes,
           pointsImpact,
-          isCustom: isCustomInput
+          isCustom: isCustomActivity,
+          rewardMode: selectedRewardMode,
+          completionCount: completionCountValue,
+          pointsPerUnit: pointRatio
         }),
       });
 
@@ -178,7 +242,12 @@ export function Earn() {
             <div className="relative">
               <select 
                 value={selectedActivity}
-                onChange={(e) => setSelectedActivity(e.target.value)}
+                onChange={(e) => {
+                  setSelectedActivity(e.target.value);
+                  if (e.target.value === CUSTOM_ACTIVITY_OPTION) {
+                    setRewardMode('timed');
+                  }
+                }}
                 className="w-full h-14 pl-4 pr-10 bg-surface-container-lowest border-none rounded-default focus:ring-2 focus:ring-primary appearance-none font-medium shadow-sm"
               >
                 {allOptions.map(opt => (
@@ -189,7 +258,7 @@ export function Earn() {
             </div>
           </div>
 
-          {selectedActivity === 'Custom Activity...' && (
+          {isCustomInput && (
             <motion.div 
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -207,43 +276,116 @@ export function Earn() {
             </motion.div>
           )}
 
+          {isCustomActivity && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-2"
+            >
+              <label className="block text-sm font-semibold text-on-surface-variant ml-1">Point Style</label>
+              <div className="grid grid-cols-2 gap-2 rounded-xl bg-surface-container-lowest p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setRewardMode('timed')}
+                  className={cn(
+                    'h-11 rounded-lg text-sm font-bold transition-all',
+                    activeRewardMode === 'timed'
+                      ? 'bg-primary text-on-primary shadow-sm'
+                      : 'text-on-surface-variant'
+                  )}
+                >
+                  Timed
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRewardMode('completion')}
+                  className={cn(
+                    'h-11 rounded-lg text-sm font-bold transition-all',
+                    activeRewardMode === 'completion'
+                      ? 'bg-primary text-on-primary shadow-sm'
+                      : 'text-on-surface-variant'
+                  )}
+                >
+                  Per Completion
+                </button>
+              </div>
+            </motion.div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-on-surface-variant ml-1">Duration (min)</label>
-              <div className="relative">
-                <input 
-                  type="text"
-                  required
-                  value={duration}
-                  onChange={(e) => setDuration(cleanPositiveIntegerText(e.target.value))}
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  className="w-full h-14 pl-4 pr-10 bg-surface-container-lowest border-none rounded-default focus:ring-2 focus:ring-primary font-medium shadow-sm"
-                />
-                <Timer className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 w-4 h-4" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-on-surface-variant ml-1">Ratio (pts/min)</label>
-              <div className="relative">
-                <input 
-                  type="text"
-                  required
-                  value={ratio}
-                  onChange={(e) => setRatio(cleanPositiveIntegerText(e.target.value))}
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  className="w-full h-14 pl-4 pr-10 bg-surface-container-lowest border-none rounded-default focus:ring-2 focus:ring-primary font-medium shadow-sm"
-                />
-                <Coins className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 w-4 h-4" />
-              </div>
-            </div>
+            {activeRewardMode === 'completion' ? (
+              <>
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-on-surface-variant ml-1">Times completed</label>
+                  <div className="relative">
+                    <input 
+                      type="text"
+                      required
+                      value={completionCount}
+                      onChange={(e) => setCompletionCount(cleanPositiveIntegerText(e.target.value))}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="w-full h-14 pl-4 pr-10 bg-surface-container-lowest border-none rounded-default focus:ring-2 focus:ring-primary font-medium shadow-sm"
+                    />
+                    <ListChecks className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 w-4 h-4" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-on-surface-variant ml-1">Points each</label>
+                  <div className="relative">
+                    <input 
+                      type="text"
+                      required
+                      value={ratio}
+                      onChange={(e) => setRatio(cleanPositiveIntegerText(e.target.value))}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="w-full h-14 pl-4 pr-10 bg-surface-container-lowest border-none rounded-default focus:ring-2 focus:ring-primary font-medium shadow-sm"
+                    />
+                    <Coins className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 w-4 h-4" />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-on-surface-variant ml-1">Duration (min)</label>
+                  <div className="relative">
+                    <input 
+                      type="text"
+                      required
+                      value={duration}
+                      onChange={(e) => setDuration(cleanPositiveIntegerText(e.target.value))}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="w-full h-14 pl-4 pr-10 bg-surface-container-lowest border-none rounded-default focus:ring-2 focus:ring-primary font-medium shadow-sm"
+                    />
+                    <Timer className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 w-4 h-4" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-on-surface-variant ml-1">Points/min</label>
+                  <div className="relative">
+                    <input 
+                      type="text"
+                      required
+                      value={ratio}
+                      onChange={(e) => setRatio(cleanPositiveIntegerText(e.target.value))}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="w-full h-14 pl-4 pr-10 bg-surface-container-lowest border-none rounded-default focus:ring-2 focus:ring-primary font-medium shadow-sm"
+                    />
+                    <Coins className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 w-4 h-4" />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="bg-primary/5 p-4 rounded-xl border border-primary/10 flex justify-between items-center">
             <span className="text-sm font-bold text-on-surface-variant">Estimated Points</span>
             <span className="text-2xl font-black text-primary">
-              {Math.round(parsePositiveInteger(duration, 0) * parsePositiveInteger(ratio, 0))}
+              {estimatedPoints}
             </span>
           </div>
 
@@ -287,7 +429,7 @@ export function Earn() {
                       <div className="flex flex-col">
                         <span className="text-sm font-bold text-on-surface">{activity.activityName}</span>
                         <span className="text-[10px] text-on-surface-variant font-medium">
-                          {activity.durationMinutes} mins
+                          {formatEarnActivityDetail(activity)}
                         </span>
                       </div>
                     </td>

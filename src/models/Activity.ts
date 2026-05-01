@@ -6,6 +6,9 @@ const activitySchema = new mongoose.Schema({
   activityName: { type: String, required: true },
   durationMinutes: { type: Number, required: true },
   pointsImpact: { type: Number, required: true },
+  rewardMode: { type: String, enum: ['timed', 'completion'], default: 'timed' },
+  completionCount: { type: Number },
+  pointsPerUnit: { type: Number },
   createdAt: { type: Date, default: Date.now },
 });
 

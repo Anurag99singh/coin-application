@@ -40,6 +40,43 @@ const mapToObject = (value: any) => {
   return value;
 };
 
+const sanitizePositiveInteger = (value: any, fallback = 1) => {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return Math.round(parsed);
+};
+
+const normalizeRewardMode = (value: any) => {
+  return value === 'completion' ? 'completion' : 'timed';
+};
+
+const serializeCustomEarnActivityRules = (value: any) => {
+  const rawRules = mapToObject(value);
+
+  return Object.entries(rawRules).reduce<Record<string, any>>((rules, [name, rawRule]) => {
+    if (!name) return rules;
+
+    const rule = mapToObject(rawRule);
+    const rewardMode = normalizeRewardMode(rule.rewardMode);
+    const pointsPerUnit = sanitizePositiveInteger(rule.pointsPerUnit, 1);
+
+    rules[name] = {
+      rewardMode,
+      pointsPerUnit,
+    };
+
+    if (rewardMode === 'timed') {
+      rules[name].defaultDurationMinutes = sanitizePositiveInteger(rule.defaultDurationMinutes, 20);
+    }
+
+    return rules;
+  }, {});
+};
+
 const serializeUser = (user: any) => {
   const totalCoins = Math.round(Math.max(0, Number(user.total_coins) || 0));
   const cycleStart = Math.round(Math.max(0, Number(user.surprise_cycle_start_points) || 0));
@@ -54,6 +91,7 @@ const serializeUser = (user: any) => {
     total_coins: totalCoins,
     min_per_coin_ratio: user.min_per_coin_ratio ?? 1,
     custom_earn_activities: user.custom_earn_activities ?? [],
+    custom_earn_activity_rules: serializeCustomEarnActivityRules(user.custom_earn_activity_rules),
     custom_play_activities: user.custom_play_activities ?? [],
     surprises: mapToObject(user.surprises),
     surprise_goal_points: user.surprise_goal_points ?? 500,
@@ -172,11 +210,39 @@ async function startServer() {
         ? user.surprise_reward_name.trim()
         : 'Mystery Surprise';
 
+      res.json({ user: serializeUser(user), rewardName });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/profile/reset-surprise', authenticateToken, async (req: any, res) => {
+    try {
+      const { password } = req.body;
+      if (password !== 'pari') {
+        return res.status(403).json({ error: 'Incorrect parental password' });
+      }
+
+      const user = await (User as any).findById(req.user.userId);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      const totalCoins = Math.round(Math.max(0, Number(user.total_coins) || 0));
+      const cycleStart = Math.round(Math.max(0, Number(user.surprise_cycle_start_points) || 0));
+      const goalPoints = Math.max(1, Math.round(Number(user.surprise_goal_points) || 500));
+      const legacyCyclePoints = Math.max(0, totalCoins - cycleStart);
+      const cyclePoints = user.surprise_cycle_points === undefined || user.surprise_cycle_points === null
+        ? legacyCyclePoints
+        : Math.round(Math.max(0, Number(user.surprise_cycle_points) || 0));
+
+      if (cyclePoints < goalPoints) {
+        return res.status(400).json({ error: 'Surprise is not unlocked yet.' });
+      }
+
       user.surprise_cycle_start_points = totalCoins;
       user.surprise_cycle_points = 0;
       await user.save();
 
-      res.json({ user: serializeUser(user), rewardName });
+      res.json(serializeUser(user));
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
@@ -219,9 +285,13 @@ async function startServer() {
     try {
       const { type, activityName } = req.body;
       const field = type === 'earn' ? 'custom_earn_activities' : 'custom_play_activities';
+      const update: any = { $pull: { [field]: activityName } };
+      if (type === 'earn' && activityName) {
+        update.$unset = { [`custom_earn_activity_rules.${activityName}`]: '' };
+      }
       const user = await (User as any).findByIdAndUpdate(
         req.user.userId,
-        { $pull: { [field]: activityName } },
+        update,
         { returnDocument: 'after' }
       );
       if (!user) return res.status(404).json({ error: 'User not found' });
@@ -234,24 +304,85 @@ async function startServer() {
   // Activity Routes
   app.post('/api/activities', authenticateToken, async (req: any, res) => {
     try {
-      const { type, activityName, durationMinutes, pointsImpact, isCustom } = req.body;
-      const activity = new Activity({
-        userId: req.user.userId,
+      const {
         type,
         activityName,
         durationMinutes,
-        pointsImpact
+        pointsImpact,
+        isCustom,
+        rewardMode,
+        completionCount,
+        pointsPerUnit
+      } = req.body;
+      if (type !== 'earn' && type !== 'spend') {
+        return res.status(400).json({ error: 'Invalid activity type' });
+      }
+
+      const normalizedActivityName = typeof activityName === 'string' ? activityName.trim() : '';
+      if (!normalizedActivityName) {
+        return res.status(400).json({ error: 'Activity name is required' });
+      }
+
+      const submittedPointsImpact = Math.round(Number(pointsImpact) || 0);
+      const normalizedRewardMode = type === 'earn' && isCustom
+        ? normalizeRewardMode(rewardMode)
+        : 'timed';
+      const normalizedDurationMinutes = normalizedRewardMode === 'completion'
+        ? 0
+        : sanitizePositiveInteger(durationMinutes, 1);
+      const normalizedCompletionCount = normalizedRewardMode === 'completion'
+        ? sanitizePositiveInteger(completionCount, 1)
+        : undefined;
+      const inferredPointsPerUnit = normalizedRewardMode === 'completion'
+        ? submittedPointsImpact
+        : normalizedDurationMinutes > 0
+          ? Math.round(submittedPointsImpact / normalizedDurationMinutes)
+          : submittedPointsImpact;
+      const normalizedPointsPerUnit = type === 'earn' && isCustom
+        ? sanitizePositiveInteger(pointsPerUnit, sanitizePositiveInteger(inferredPointsPerUnit, 1))
+        : pointsPerUnit === undefined
+          ? undefined
+          : sanitizePositiveInteger(pointsPerUnit, 1);
+      const normalizedPointsImpact = type === 'earn' && isCustom
+        ? normalizedRewardMode === 'completion'
+          ? Math.round((normalizedCompletionCount || 1) * (normalizedPointsPerUnit || 1))
+          : Math.round(normalizedDurationMinutes * (normalizedPointsPerUnit || 1))
+        : submittedPointsImpact;
+
+      const activity = new Activity({
+        userId: req.user.userId,
+        type,
+        activityName: normalizedActivityName,
+        durationMinutes: normalizedDurationMinutes,
+        pointsImpact: normalizedPointsImpact,
+        rewardMode: normalizedRewardMode,
+        completionCount: normalizedCompletionCount,
+        pointsPerUnit: normalizedPointsPerUnit
       });
       await activity.save();
 
       // Update user total coins and optionally add custom activity
-      const update: any = { $inc: { total_coins: pointsImpact } };
-      if (type === 'earn' && pointsImpact > 0) {
-        update.$inc.surprise_cycle_points = Math.round(pointsImpact);
+      const update: any = { $inc: { total_coins: normalizedPointsImpact } };
+      if (type === 'earn' && normalizedPointsImpact > 0) {
+        update.$inc.surprise_cycle_points = Math.round(normalizedPointsImpact);
       }
       if (isCustom) {
         const field = type === 'earn' ? 'custom_earn_activities' : 'custom_play_activities';
-        update.$addToSet = { [field]: activityName };
+        update.$addToSet = { [field]: normalizedActivityName };
+
+        if (type === 'earn') {
+          const customEarnActivityRule: any = {
+            rewardMode: normalizedRewardMode,
+            pointsPerUnit: normalizedPointsPerUnit,
+          };
+          if (normalizedRewardMode === 'timed') {
+            customEarnActivityRule.defaultDurationMinutes = normalizedDurationMinutes;
+          }
+
+          update.$set = {
+            [`custom_earn_activity_rules.${normalizedActivityName}`]: customEarnActivityRule
+          };
+        }
       }
 
       await (User as any).findByIdAndUpdate(req.user.userId, update);

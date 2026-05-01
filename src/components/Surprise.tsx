@@ -1,7 +1,7 @@
 import React, { useContext, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import confetti from 'canvas-confetti';
-import { Gift, Sparkles, Star } from 'lucide-react';
+import { Gift, Lock, RotateCcw, Sparkles, Star } from 'lucide-react';
 import { AuthContext } from '../App.tsx';
 import { cn } from '../lib/utils.ts';
 
@@ -47,8 +47,10 @@ function getMarkerPosition(progressRatio: number) {
 export function Surprise() {
   const { user, token, updateUser } = useContext(AuthContext)!;
   const [isRewardOpen, setIsRewardOpen] = useState(false);
-  const [claiming, setClaiming] = useState(false);
-  const [claimError, setClaimError] = useState('');
+  const [isResetFormOpen, setIsResetFormOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetError, setResetError] = useState('');
   const [revealedRewardName, setRevealedRewardName] = useState('');
   const totalCoins = Math.round(Math.max(0, user?.total_coins || 0));
   const cycleStart = Math.round(Math.max(0, user?.surprise_cycle_start_points || 0));
@@ -62,37 +64,61 @@ export function Surprise() {
   const marker = getMarkerPosition(progressRatio);
   const pathPoints = pathNodes.map((node) => `${node.x},${node.y}`).join(' ');
 
-  const openGift = async () => {
+  const openGift = () => {
     if (!isUnlocked) return;
-    setClaiming(true);
-    setClaimError('');
+
+    setRevealedRewardName(rewardName);
+    setResetError('');
+    setResetPassword('');
+    setIsResetFormOpen(false);
+    setIsRewardOpen(true);
+    confetti({
+      particleCount: 140,
+      spread: 80,
+      origin: { y: 0.45 },
+      colors: ['#fd9000', '#a7295a', '#4555a8', '#ffd166']
+    });
+  };
+
+  const closeRewardPopup = () => {
+    setIsRewardOpen(false);
+    setIsResetFormOpen(false);
+    setResetPassword('');
+    setResetError('');
+  };
+
+  const resetQuest = async () => {
+    if (!token) {
+      setResetError('Please log in to reset this quest.');
+      return;
+    }
+
+    setResetting(true);
+    setResetError('');
 
     try {
-      const res = await fetch('/api/profile/claim-surprise', {
+      const res = await fetch('/api/profile/reset-surprise', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ password: resetPassword }),
       });
       const data = await readJsonResponse(res);
 
-      if (!res.ok || data.error || !data.user) {
-        setClaimError(data.error || 'Could not reset the surprise quest.');
+      if (!res.ok || data.error || !data._id) {
+        setResetError(data.error || 'Could not reset the surprise quest.');
         return;
       }
 
-      setRevealedRewardName(data.rewardName || rewardName);
-      updateUser(data.user);
-      setIsRewardOpen(true);
-      confetti({
-        particleCount: 140,
-        spread: 80,
-        origin: { y: 0.45 },
-        colors: ['#fd9000', '#a7295a', '#4555a8', '#ffd166']
-      });
+      updateUser(data);
+      closeRewardPopup();
     } catch (err) {
       console.error(err);
-      setClaimError('Could not open the surprise. Please try again.');
+      setResetError('Could not reset the surprise quest. Please try again.');
     } finally {
-      setClaiming(false);
+      setResetting(false);
     }
   };
 
@@ -121,11 +147,6 @@ export function Surprise() {
           {isUnlocked && (
             <p className="mx-auto mt-2 max-w-[18rem] text-sm font-black text-on-surface-variant">
               Tap the glowing gift to see your surprise.
-            </p>
-          )}
-          {claimError && !isRewardOpen && (
-            <p className="mx-auto mt-3 max-w-[18rem] rounded-xl bg-error/10 px-3 py-2 text-xs font-bold text-error">
-              {claimError}
             </p>
           )}
         </div>
@@ -196,7 +217,7 @@ export function Surprise() {
                         <button
                           type="button"
                           onClick={openGift}
-                          disabled={!isUnlocked || claiming}
+                          disabled={!isUnlocked}
                           className={cn(
                             'relative z-50 flex h-16 w-16 items-center justify-center rounded-full border-4 shadow-md transition-transform',
                             reached
@@ -288,15 +309,66 @@ export function Surprise() {
                 Show this to your parent to get your surprise.
               </p>
 
-              {claimError && (
-                <p className="mt-4 rounded-xl bg-error/10 px-3 py-2 text-xs font-bold text-error">
-                  {claimError}
-                </p>
-              )}
+              <div className="mt-5 rounded-2xl border border-primary-container/30 bg-[#fffaf5] p-4 text-left">
+                {!isResetFormOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsResetFormOpen(true);
+                      setResetError('');
+                    }}
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-surface-container-high text-sm font-black text-primary transition-all active:scale-95"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Reset Quest
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-primary">
+                      <Lock className="h-4 w-4" />
+                      <span className="text-xs font-black uppercase tracking-wider">Reset and start next surprise?</span>
+                    </div>
+                    <input
+                      type="password"
+                      value={resetPassword}
+                      onChange={(e) => setResetPassword(e.target.value)}
+                      placeholder="Parent password"
+                      className="h-12 w-full rounded-xl border border-primary/20 bg-white px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    {resetError && (
+                      <p className="rounded-xl bg-error/10 px-3 py-2 text-xs font-bold text-error">
+                        {resetError}
+                      </p>
+                    )}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsResetFormOpen(false);
+                          setResetPassword('');
+                          setResetError('');
+                        }}
+                        disabled={resetting}
+                        className="h-11 rounded-xl bg-surface-container text-sm font-black text-on-surface-variant transition-all active:scale-95 disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetQuest}
+                        disabled={resetting}
+                        className="h-11 rounded-xl bg-primary text-sm font-black text-on-primary transition-all active:scale-95 disabled:opacity-60"
+                      >
+                        {resetting ? 'Resetting...' : 'Confirm Reset'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <button
                 type="button"
-                onClick={() => setIsRewardOpen(false)}
+                onClick={closeRewardPopup}
                 className="mt-6 h-14 w-full rounded-2xl bg-primary-container font-headline text-lg font-black text-white shadow-[0_6px_0_#c26600] transition-all active:translate-y-[6px] active:shadow-none disabled:opacity-60"
               >
                 Done
